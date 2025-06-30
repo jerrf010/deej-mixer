@@ -52,8 +52,9 @@ All parts, quantities, and purchase links are available in this shared spreadshe
 ## ⚡ Wiring Overview
 
 - **Sliders:** A0–A8 (GND/VCC as appropriate)
-- **LED DATA:** D6
-- **Button:** D2 and GND
+- **LED STRIP DATA:** D2-D6
+- **Button:** D8 and GND
+- **BUTTON LED:** D7 and GND
 - **Power:** USB (5V, GND)
 
 *You may change pinouts in code to fit your hardware layout.*
