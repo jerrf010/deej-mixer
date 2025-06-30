@@ -39,7 +39,7 @@ All parts, quantities, and purchase links are available in this shared spreadshe
 
 ## 🛠️ Features
 
-- **8 Analog Sliders / Faders** (A0–A7): tactile mixer control for your PC.
+- **8 Analog Sliders / Faders** (A0–A7).
 - **5x5 WS2812B RGB LED Matrix**: animated feedback, four modes (off, rainbow, ripple, breathing).
 - **4 Rotary Potentiometers**: assignable, e.g., for extra mixer channels or custom controls.
 - **12mm Push Button**: switches LED modes.
