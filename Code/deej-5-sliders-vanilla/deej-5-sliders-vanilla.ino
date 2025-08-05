@@ -1,11 +1,18 @@
 #include <Adafruit_NeoPixel.h>
 #include <EEPROM.h>
 
+// MCP3008 SPI Bit-Bang
+const int CLK = 11;
+const int DOUT = 13;
+const int DIN = 12;
+const int CS = 10;
+
 #define NUM_STRIPS 5
 #define LEDS_PER_STRIP 5
 
-const int NUM_SLIDERS = 8;
-const int analogInputs[NUM_SLIDERS] = {A0, A1, A2, A3, A4, A5, A6, A7};
+const int NUM_SLIDERS = 9;
+const int NUM_ANALOG_SLIDERS = 8;
+const int analogInputs[NUM_ANALOG_SLIDERS] = {A0, A1, A2, A3, A4, A5, A6, A7};
 
 int analogSliderValues[NUM_SLIDERS];
 int ledPins[NUM_STRIPS] = {2, 3, 4, 5, 6};
@@ -23,56 +30,73 @@ bool isSleeping = false;
 
 Adafruit_NeoPixel* strips[NUM_STRIPS];
 
+// MCP3008 reading function
+int readMCP3008(int channel) {
+  int adcValue = 0;
+  digitalWrite(CS, LOW);
+  byte command = 0b00011000 | (channel & 0x07);
+  for (int i = 4; i >= 0; i--) {
+    digitalWrite(DIN, (command >> i) & 0x01);
+    digitalWrite(CLK, HIGH); delayMicroseconds(1);
+    digitalWrite(CLK, LOW); delayMicroseconds(1);
+  }
+  for (int i = 0; i < 12; i++) {
+    digitalWrite(CLK, HIGH); delayMicroseconds(1);
+    digitalWrite(CLK, LOW); delayMicroseconds(1);
+    adcValue <<= 1;
+    if (digitalRead(DOUT)) adcValue |= 0x01;
+  }
+  digitalWrite(CS, HIGH);
+  return (adcValue >> 1) & 0x3FF;
+}
+
 void setup() {
-  // Initialize all LED strips on digital pins D2–D7
+  // MCP3008 Pins
+  pinMode(CLK, OUTPUT);
+  pinMode(DIN, OUTPUT);
+  pinMode(DOUT, INPUT);
+  pinMode(CS, OUTPUT);
+  digitalWrite(CS, HIGH);
+  digitalWrite(CLK, LOW);
+
+  // LED strips
   for (int i = 0; i < NUM_STRIPS; i++) {
     strips[i] = new Adafruit_NeoPixel(LEDS_PER_STRIP, ledPins[i], NEO_GRB + NEO_KHZ800);
     strips[i]->begin();
-    strips[i]->show();  // Initialize all LEDs to off
+    strips[i]->show();
   }
-
-  // Configure analog input pins A0–A7 for the sliders
-  for (int i = 0; i < NUM_SLIDERS; i++) {
+  // Analog pins
+  for (int i = 0; i < NUM_ANALOG_SLIDERS; i++) {
     pinMode(analogInputs[i], INPUT);
   }
+  // Button and indicator
+  pinMode(buttonPin, INPUT_PULLUP);
+  pinMode(ledIndicatorPin, OUTPUT);
 
-  // Set up the momentary button and its LED indicator
-  pinMode(buttonPin, INPUT_PULLUP);   // Button uses internal pull-up resistor
-  pinMode(ledIndicatorPin, OUTPUT);    // LED output
-
-  // Initialize serial for debugging or communication
   Serial.begin(9600);
 
-  // Load the saved mode from EEPROM
-  mode = EEPROM.read(0); // Read the first byte
-  if (mode >= numModes) {
-    mode = 0; // Default to mode 0 if invalid
-  }
+  // EEPROM Mode
+  mode = EEPROM.read(0);
+  if (mode >= numModes) mode = 0;
 
-  // --- Startup animation: ripple effect ---
+  // Startup animation: ripple
   for (int frame = 0; frame < LEDS_PER_STRIP + 2; frame++) {
     for (int stripIndex = 0; stripIndex < NUM_STRIPS; stripIndex++) {
       for (int led = 0; led < LEDS_PER_STRIP; led++) {
         if (led == frame - 1 || led == frame - 2) {
-          strips[stripIndex]->setPixelColor(led, strips[stripIndex]->Color(255, 255, 255)); // white ripple
+          strips[stripIndex]->setPixelColor(led, strips[stripIndex]->Color(255, 255, 255));
         } else {
           strips[stripIndex]->setPixelColor(led, 0);
         }
       }
       strips[stripIndex]->show();
     }
-    delay(100); // adjust speed of ripple
+    delay(100);
   }
-
-  // Turn off all LEDs after animation
   for (int i = 0; i < NUM_STRIPS; i++) {
-    for (int j = 0; j < LEDS_PER_STRIP; j++) {
-      strips[i]->setPixelColor(j, 0);
-    }
+    for (int j = 0; j < LEDS_PER_STRIP; j++) strips[i]->setPixelColor(j, 0);
     strips[i]->show();
   }
-
-  // Delay for 1 second before starting the main loop
   delay(1000);
 }
 
@@ -91,7 +115,6 @@ void loop() {
       Serial.print("Mode changed to: ");
       Serial.println(mode);
     }
-
     delay(200); // Debounce
   }
 
@@ -124,7 +147,6 @@ void loop() {
       }
       strips[i]->show();
     }
-
   } else if (mode == 1) {
     // MODE 1: Slider Effects
     for (int stripIndex = 0; stripIndex < NUM_STRIPS; stripIndex++) {
@@ -156,7 +178,6 @@ void loop() {
       }
       strips[stripIndex]->show();
     }
-
   } else if (mode == 2) {
     // MODE 2: Rainbow Animation
     static uint16_t rainbowOffset = 0;
@@ -168,7 +189,6 @@ void loop() {
       strips[i]->show();
     }
     rainbowOffset += 256;
-
   } else if (mode == 3) {
     // MODE 3: RGB Ripple Effect
     static int rippleFrame = 0;
@@ -200,7 +220,7 @@ void updateSliderValues() {
   static int prevSliderValues[NUM_SLIDERS];
   bool sliderMoved = false;
 
-  for (int i = 0; i < NUM_SLIDERS; i++) {
+  for (int i = 0; i < NUM_ANALOG_SLIDERS; i++) {
     int val = analogRead(analogInputs[i]);
     analogSliderValues[i] = val;
 
@@ -210,24 +230,27 @@ void updateSliderValues() {
     prevSliderValues[i] = val;
   }
 
+  // MCP3008 as 9th "slider"
+  int mcpVal = readMCP3008(0);
+  analogSliderValues[8] = mcpVal;
+  if (abs(mcpVal - prevSliderValues[8]) > 10) sliderMoved = true;
+  prevSliderValues[8] = mcpVal;
+
   if (sliderMoved) {
     lastActivityTime = millis();
     if (isSleeping) wakeFromSleep();
   }
 }
 
-
 void sendSliderValues() {
-  String builtString = String("");
+  String builtString = "";
 
   for (int i = 0; i < NUM_SLIDERS; i++) {
-    builtString += String((int)analogSliderValues[i]);
-
+    builtString += String(analogSliderValues[i]);
     if (i < NUM_SLIDERS - 1) {
-      builtString += String("|");
+      builtString += "|";
     }
   }
-  
   Serial.println(builtString);
 }
 
