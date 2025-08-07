@@ -224,7 +224,7 @@ void updateSliderValues() {
     int val = analogRead(analogInputs[i]);
     analogSliderValues[i] = val;
 
-    if (abs(val - prevSliderValues[i]) > 10) {
+    if (abs(val - prevSliderValues[i]) > 30) {
       sliderMoved = true;
     }
     prevSliderValues[i] = val;
@@ -233,7 +233,7 @@ void updateSliderValues() {
   // MCP3008 as 9th "slider"
   int mcpVal = readMCP3008(0);
   analogSliderValues[8] = mcpVal;
-  if (abs(mcpVal - prevSliderValues[8]) > 10) sliderMoved = true;
+  if (abs(mcpVal - prevSliderValues[8]) > 20) sliderMoved = true;
   prevSliderValues[8] = mcpVal;
 
   if (sliderMoved) {
